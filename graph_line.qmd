@@ -1,0 +1,202 @@
+---
+title: "Graph"
+author: "Manning Wu"
+format: pdf
+---
+
+```{r}
+#| echo: false
+library(MASS)
+library(gtools)
+library(faraway)
+library(ggplot2)
+library(tidyverse)
+library(viridis)
+library(Metrics)
+library(gridExtra)
+```
+
+```{r}
+#| warning: false
+## Initialization and parameter settings
+set.seed(1024)
+iter <- 10000
+p <- 3
+n <- 5000 # Number of observations
+beta <- numeric(p) + 1 # True coefficients
+alpha_list <- c(0, 0.1, 0.5, 1)
+rou_list <- c(0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 0.93, 0.96, 0.99)
+s_list <- c(0.1, 0.2, 0.3, 0.5, 1, 10)
+integrity_generator <- function(integrity, p) {
+  itg <- permutations(length(integrity), p-1, integrity, repeats.allowed = TRUE)
+  itg <- rbind(itg[1:4, ], itg[6, ], itg[11, ], itg[16, ])
+  return(itg)
+}
+integrity <- integrity_generator(c(0, 0.2, 0.5, 1), p)
+```
+
+```{r}
+## load the data
+df_SEbeta1 <- data.frame(se = numeric(0), sd_error = character(0), corr = numeric(0))
+df_SEbeta2 <- data.frame(se = numeric(0), sd_error = character(0), corr = numeric(0))
+df_SEbeta3 <- data.frame(se = numeric(0), sd_error = character(0), corr = numeric(0))
+for (s in s_list) {
+  df <- read.csv(paste0("result_itg", 10, 10, "/se_s", 10*s, ".csv"))
+  se_beta1 <- data.frame(se = df$V1, sd_error = as.character(numeric(nrow(df)) + s), corr = rou_list)
+  se_beta2 <- data.frame(se = df$V2, sd_error = as.character(numeric(nrow(df)) + s), corr = rou_list)
+  se_beta3 <- data.frame(se = df$V3, sd_error = as.character(numeric(nrow(df)) + s), corr = rou_list)
+  df_SEbeta1 <- rbind(df_SEbeta1, se_beta1)
+  df_SEbeta2 <- rbind(df_SEbeta2, se_beta2)
+  df_SEbeta3 <- rbind(df_SEbeta3, se_beta3)
+}
+```
+
+```{r}
+## plot
+plot1 <- ggplot(df_SEbeta1, aes(x = corr, y = se, color = sd_error)) +
+  geom_point() +
+  geom_line(linewidth = 1) +
+  scale_color_viridis_d(option = "plasma") +
+  labs(title = "standard error of beta1", 
+       x = "", y = "standard error") +
+  theme_minimal()
+
+plot2 <- ggplot(df_SEbeta2, aes(x = corr, y = se, color = sd_error)) +
+  geom_point() +
+  geom_line(linewidth = 1) +
+  scale_color_viridis_d(option = "plasma") +
+  labs(title = "standard error of beta2", 
+       x = "correlation between X1 and X2", y = "") +
+  theme_minimal()
+
+plot3 <- ggplot(df_SEbeta3, aes(x = corr, y = se, color = sd_error)) +
+  geom_point() +
+  geom_line(linewidth = 1) +
+  scale_color_viridis_d(option = "plasma") +
+  labs(title = "standard error of beta3", 
+       x = "", y = "") +
+  theme_minimal()
+
+## Figure 1
+plot_coefs_box <- grid.arrange(plot1, plot2, plot3, ncol = 3)
+ggsave("plot_se_line.png", plot = plot_coefs_box, width = 20, height = 6, dpi = 600)
+# ggsave("plot_se1_line.png", plot = plot1, width = 10, height = 6, dpi = 600)
+# ggsave("plot_se2_line.png", plot = plot2, width = 10, height = 6, dpi = 600)
+# ggsave("plot_se3_line.png", plot = plot3, width = 10, height = 6, dpi = 600)
+```
+
+
+```{r}
+## load the data
+df_beta1 <- data.frame(se = numeric(0), sd_error = character(0), corr = numeric(0))
+df_beta2 <- data.frame(se = numeric(0), sd_error = character(0), corr = numeric(0))
+df_beta3 <- data.frame(se = numeric(0), sd_error = character(0), corr = numeric(0))
+
+for (s in s_list) {
+  df <- read.csv(paste0("result_itg", 10, 10, "/coefs_s", 10*s, ".csv"))
+  beta1 <- data.frame(se = df$V1, sd_error = as.character(numeric(nrow(df)) + s), corr = rou_list)
+  beta2 <- data.frame(se = df$V2, sd_error = as.character(numeric(nrow(df)) + s), corr = rou_list)
+  beta3 <- data.frame(se = df$V3, sd_error = as.character(numeric(nrow(df)) + s), corr = rou_list)
+  df_beta1 <- rbind(df_beta1, beta1)
+  df_beta2 <- rbind(df_beta2, beta2)
+  df_beta3 <- rbind(df_beta3, beta3)
+}
+```
+
+
+```{r}
+## plot
+plot4 <- ggplot(df_beta1, aes(x = corr, y = se, color = sd_error)) +
+  geom_point() +
+  geom_line(linewidth = 1) +
+  scale_color_viridis_d(option = "plasma") +
+  labs(title = "estimation of beta1", 
+       x = "correlation between X1 and X2", y = "estimated coefficient") +
+  ylim(0.9, 1.1) +
+  theme_bw() +
+  theme(panel.background = element_rect(fill = "white"))  
+
+plot5 <- ggplot(df_beta2, aes(x = corr, y = se, color = sd_error)) +
+  geom_point() +
+  geom_line(linewidth = 1) +
+  scale_color_viridis_d(option = "plasma") +
+  labs(title = "estimation of beta2", 
+       x = "correlation between X1 and X2", y = "estimated coefficient") +
+  ylim(0.9, 1.1) +
+  theme_bw() +
+  theme(panel.background = element_rect(fill = "white"))  
+
+plot6 <- ggplot(df_beta3, aes(x = corr, y = se, color = sd_error)) +
+  geom_point() +
+  geom_line(linewidth = 1) +
+  scale_color_viridis_d(option = "plasma") +
+  labs(title = "estimation of beta3", 
+       x = "correlation between X1 and X2", y = "estimated coefficient") +
+  ylim(0.9, 1.1) +
+  theme_bw() +
+  theme(panel.background = element_rect(fill = "white"))  
+
+## Figure 3
+# plot_coefs_box <- grid.arrange(plot1, plot2, plot3, ncol = 3)
+ggsave("plot_coefs1_line.png", plot = plot4, width = 10, height = 6,dpi = 600)
+ggsave("plot_coefs2_line.png", plot = plot5, width = 10, height = 6,dpi = 600)
+ggsave("plot_coefs3_line.png", plot = plot6, width = 10, height = 6,dpi = 600)
+```
+
+
+```{r}
+## load the data
+df_beta1 <- data.frame(vif = numeric(0), sd_error = character(0), corr = numeric(0))
+df_beta2 <- data.frame(vif = numeric(0), sd_error = character(0), corr = numeric(0))
+df_beta3 <- data.frame(vif = numeric(0), sd_error = character(0), corr = numeric(0))
+
+for (s in s_list) {
+  df <- read.csv(paste0("result_itg", 10, 10, "/vifs_s", 10*s, ".csv"))
+  beta1 <- data.frame(vif = df$V1, sd_error = as.character(numeric(nrow(df)) + s), corr = rou_list)
+  beta2 <- data.frame(vif = df$V2, sd_error = as.character(numeric(nrow(df)) + s), corr = rou_list)
+  beta3 <- data.frame(vif = df$V3, sd_error = as.character(numeric(nrow(df)) + s), corr = rou_list)
+  df_beta1 <- rbind(df_beta1, beta1)
+  df_beta2 <- rbind(df_beta2, beta2)
+  df_beta3 <- rbind(df_beta3, beta3)
+}
+```
+
+
+```{r}
+## plot
+plot7 <- ggplot(df_beta1, aes(x = corr, y = vif, color = sd_error)) +
+  geom_point() +
+  geom_line(linewidth = 1) +
+  scale_color_viridis_d(option = "plasma") +
+  labs(title = "VIF beta1", 
+       x = "correlation between X1 and X2", y = "VIF") +
+  theme_bw() +
+  theme(panel.background = element_rect(fill = "white"))  
+
+plot8 <- ggplot(df_beta2, aes(x = corr, y = vif, color = sd_error)) +
+  geom_point() +
+  geom_line(linewidth = 1) +
+  scale_color_viridis_d(option = "plasma") +
+  labs(title = "VIF of beta2", 
+       x = "correlation between X1 and X2", y = "VIF") +
+  theme_bw() +
+  theme(panel.background = element_rect(fill = "white"))  
+
+plot9 <- ggplot(df_beta3, aes(x = corr, y = vif, color = sd_error)) +
+  geom_point() +
+  geom_line(linewidth = 1) +
+  scale_color_viridis_d(option = "plasma") +
+  labs(title = "VIF of beta3", 
+       x = "correlation between X1 and X2", y = "VIF") +
+  theme_bw() +
+  theme(panel.background = element_rect(fill = "white"))  
+
+## Figure 4
+ggsave("plot_vif1_line.png", plot = plot7, width = 10, height = 6,dpi = 600)
+ggsave("plot_vif2_line.png", plot = plot8, width = 10, height = 6,dpi = 600)
+ggsave("plot_vif3_line.png", plot = plot9, width = 10, height = 6,dpi = 600)
+```
+
+
+
+

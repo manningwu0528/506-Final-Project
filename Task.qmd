@@ -1,0 +1,181 @@
+---
+title: "main_2"
+author: "Manning Wu"
+format: pdf
+---
+
+This experiment is for exploring how multicollinearity effects on model
+
+$$Y = X_1 + X_2 + X_3 + \gamma \text{, where } \gamma \sim N(0, 1)$$
+The multicollinearity comes from:
+
+$$X_3 = \alpha_1X_1^* + \alpha_2X_2^* + \epsilon \text{, where } \epsilon \sim N(0, s^2)$$
+
+Parameter Settings:
+
+$$\alpha_1 = \alpha_2 = 1$$
+$$Corr(X1, X2) = 0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 0.93, 0.96, 0.99$$
+
+$$s = 0.1, 0.125, 0.15, 0.2, 0.3, 0.5, 1, 10$$
+$$integrity = (0, 0), (0, 1), (1, 1), (0.2, 0.2), (0.5, 0.5)$$
+Remark: `integrity` means the integrity of $X_1$ and $X_2$ combined to $X_3$, we denote the integrity of $X_2$ and $X_3$ as $X_2^*$ and $X_3^*$ 
+
+Metrics we use: two characteristics of estimated beta (mean, standard error), p_value of predictors, and VIF 
+
+```{r}
+#| echo: false
+library(MASS)
+library(gtools)
+library(faraway)
+library(ggplot2)
+library(tidyverse)
+library(viridis)
+library(Metrics)
+```
+
+```{r}
+### Functions for experiments
+
+## Generate different alpha, but in this experiment we just set alpha = c(1, 1)
+alpha_generator <- function(p, alpha_list) {
+  alpha <- permutations(length(alpha_list), p-1, alpha_list, repeats.allowed = TRUE)
+  return(alpha)
+}
+
+## Generate different covariance between X1 and X2
+cov_generator <- function(p, rou_list) {
+  Sigma_list <- array(0, dim = c(p-1, p-1, length(rou_list)))
+  for (i in 1:length(rou_list)) {
+    Sigma_list[,,i] <- rou_list[i] * array(1, dim = c(p-1, p-1)) + (1-rou_list[i]) * diag(p-1)
+  }
+  return(Sigma_list)
+}
+
+## Generate X1, X2, and X3 for each experiment
+predictor_generator <- function(p, alpha, Sigma, s, itg) {
+  m1 <- n*itg[1]
+  m2 <- n*itg[2]
+  X1 <- mvrnorm(n, c(numeric(p-1)), Sigma)
+  if (m1 == 0){
+    X11 <- rnorm(n)
+  } else {
+    X11 <- c(X1[1:m1, 1], rnorm(n-m1))
+  }
+  
+  if (m2 == 0){
+    X12 <- rnorm(n)
+  } else {
+    X12 <- c(X1[1:m2, 2], rnorm(n-m2))
+  }
+  X2 <- cbind(X11, X12) %*% alpha + s * rnorm(n)
+  X <- cbind(X1, X2)
+  return(X)
+}
+
+## Generate different integrity of X1 and X2 combined to X3
+integrity_generator <- function(integrity, p) {
+  itg <- permutations(length(integrity), p-1, integrity, repeats.allowed = TRUE)
+  itg <- rbind(itg[1:4, ], itg[6, ], itg[11, ], itg[16, ])
+  return(itg)
+}
+
+## Monte Carlo Simulation
+MC_simulation <- function(X, s) {
+  errors <- rnorm(n)
+  Y <- X %*% beta + errors
+  data <- data.frame(y = Y, x = X)
+  model <- lm(y ~ . - 1, data)
+  mod <- summary(model)
+  beta_hat <- coef(model)
+  se <- mod$coefficients[,2]
+  p_value <- mod$coefficients[,4]
+  X_VIF <- round(vif(X), 3)
+  result <- cbind(beta_hat, p_value, se, X_VIF)
+  return(result)
+}
+```
+
+```{r}
+#| warning: false
+## Initialization and parameter settings
+set.seed(1024)
+iter <- 10000
+p <- 3
+n <- 5000 # Number of observations
+beta <- numeric(p) + 1 # True coefficients
+alpha_list <- c(0, 0.1, 0.5, 1)
+rou_list <- c(0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 0.93, 0.96, 0.99)
+s_list <- c(0.1, 0.2, 0.3, 0.5, 1, 10)
+integrity <- integrity_generator(c(0, 0.2, 0.5, 1), p)
+```
+
+```{r}
+## MC simlulation
+for (k in 1:dim(integrity)[1]) {
+  
+  itg <- integrity[k, ]
+  
+  for (s in s_list){
+    
+    coefs <- matrix(NA, ncol = p, nrow = length(rou_list))
+    pValue <- matrix(NA, ncol = p, nrow = length(rou_list))
+    se <- matrix(NA, ncol = p, nrow = length(rou_list))
+    vifs <- matrix(NA, ncol = p, nrow = length(rou_list))
+    
+    for (i in 1:length(rou_list)) {
+    
+      Sigma <- cov_generator(p, rou_list)[,,i]
+      alpha <- alpha_generator(p, alpha_list)[16,]
+      X <- predictor_generator(p, alpha, Sigma, s, itg)
+      
+      coefs_i <- matrix(NA, ncol = p, nrow = iter)
+      pValue_i <- matrix(NA, ncol = p, nrow = iter)
+      se_i <- matrix(NA, ncol = p, nrow = iter)
+      vif_i <- matrix(NA, ncol = p, nrow = iter)
+      
+      for (j in 1:iter) {
+        coefs_i[j, ] <- MC_simulation(X, s)[,1]
+        pValue_i[j, ] <- MC_simulation(X, s)[,2]
+        se_i[j, ] <- MC_simulation(X, s)[,3]
+        vif_i[j, ] <- MC_simulation(X, s)[,4]
+      }
+      
+      write.csv(as.data.frame(se_i), 
+                file = paste0("total_result/se/s", 10*s, "/itg", 10*itg[1], 10*itg[2], 
+                              "_rou", 10*rou_list[i],".csv"), 
+                row.names = FALSE)
+      write.csv(as.data.frame(coefs_i), 
+                file = paste0("total_result/coefs/s", 10*s, "/itg", 10*itg[1], 10*itg[2], 
+                              "_rou", 10*rou_list[i],".csv"), 
+                row.names = FALSE)
+      
+      mean_coefs_i <- colMeans(coefs_i)
+      coefs[i, ] <- mean_coefs_i
+      
+      mean_pValue_i <- colMeans(pValue_i)
+      pValue[i, ] <- mean_pValue_i
+      
+      mean_se_i <- colMeans(se_i)
+      se[i, ] <- mean_se_i
+      
+      mean_vif_i <- colMeans(vif_i)
+      vifs[i, ] <- mean_vif_i
+  
+    }
+    
+    write.csv(as.data.frame(se), 
+              file = paste0("result_itg", 10*itg[1], 10*itg[2], "/se_s", 10*s,".csv"), 
+              row.names = FALSE)
+    write.csv(as.data.frame(coefs), 
+              file = paste0("result_itg", 10*itg[1], 10*itg[2], "/coefs_s", 10*s, ".csv"),
+              row.names = FALSE)
+    write.csv(as.data.frame(pValue),
+              file = paste0("result_itg", 10*itg[1], 10*itg[2], "/pValue_s", 10*s, ".csv"),
+              row.names = FALSE)
+    write.csv(as.data.frame(vifs), 
+              file = paste0("result_itg", 10*itg[1], 10*itg[2], "/vifs_s", 10*s, ".csv"),
+              row.names = FALSE)
+  }
+  
+}
+```

@@ -1,0 +1,153 @@
+---
+title: "graph_box"
+author: "Manning Wu"
+format: pdf
+---
+```{r}
+#| echo: false
+library(MASS)
+library(gtools)
+library(faraway)
+library(ggplot2)
+library(tidyverse)
+library(viridis)
+library(Metrics)
+library(gridExtra)
+```
+
+```{r}
+#| warning: false
+## Initialization and parameter settings
+set.seed(1024)
+iter <- 10000
+p <- 3
+n <- 5000 # Number of observations
+beta <- numeric(p) + 1 # True coefficients
+alpha_list <- c(0, 0.1, 0.5, 1)
+rou_list <- c(0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 0.93, 0.96, 0.99)
+s_list <- c(0.1, 0.2, 0.3, 0.5, 1, 10)
+integrity_generator <- function(integrity, p) {
+  itg <- permutations(length(integrity), p-1, integrity, repeats.allowed = TRUE)
+  itg <- rbind(itg[1:4, ], itg[6, ], itg[11, ], itg[16, ])
+  return(itg)
+}
+integrity <- integrity_generator(c(0, 0.2, 0.5, 1), p)
+```
+
+```{r}
+## load the data
+df_beta1 <- data.frame(beta = numeric(0), integrity = character(0))
+df_beta2 <- data.frame(beta = numeric(0), integrity = character(0))
+df_beta3 <- data.frame(beta = numeric(0), integrity = character(0))
+
+integrity_name <- c("neither X1 nor X2", "20% X2", "50% X2", "all X2", "20%X1, 20%X2",
+                    "50%X1, 50%X2", "all X1 and X2")
+
+## Just set rou = 0.93, s = 0.5
+for (k in 1:(dim(integrity)[1])) {
+  
+  itg <- integrity[k, ]
+  itg_name <- integrity_name[k]
+  
+  s <- 0.5
+  rou <- 0.93
+    
+  df <- read.csv(paste0("total_result/coefs/s", 10*s, "/itg", 10*itg[1], 10*itg[2], 
+                            "_rou", 10*rou,".csv"))
+  beta1 <- data.frame(beta = df$V1, integrity = itg_name)
+  beta2 <- data.frame(beta = df$V2, integrity = itg_name)
+  beta3 <- data.frame(beta = df$V3, integrity = itg_name)
+  df_beta1 <- rbind(df_beta1, beta1)
+  df_beta2 <- rbind(df_beta2, beta2)
+  df_beta3 <- rbind(df_beta3, beta3)
+  
+}
+
+df_beta1$integrity <- factor(df_beta1$integrity, levels = c("neither X1 nor X2", "20% X2", "50% X2", "all X2", "20%X1, 20%X2","50%X1, 50%X2", "all X1 and X2"))
+df_beta2$integrity <- factor(df_beta2$integrity, levels = c("neither X1 nor X2", "20% X2", "50% X2", "all X2", "20%X1, 20%X2","50%X1, 50%X2", "all X1 and X2"))
+df_beta3$integrity <- factor(df_beta3$integrity, levels = c("neither X1 nor X2", "20% X2", "50% X2", "all X2", "20%X1, 20%X2","50%X1, 50%X2", "all X1 and X2"))
+```
+
+```{r}
+df_SEbeta1 <- data.frame(se = numeric(0), integrity = character(0))
+df_SEbeta2 <- data.frame(se = numeric(0), integrity = character(0))
+df_SEbeta3 <- data.frame(se = numeric(0), integrity = character(0))
+
+integrity_name <- c("neither X1 nor X2", "20% X2", "50% X2", "all X2", "20%X1, 20%X2",
+                    "50%X1, 50%X2", "all X1 and X2")
+
+## Just set rou = 0.96, s = 0.5
+for (k in 1:(dim(integrity)[1])) {
+  
+  itg <- integrity[k, ]
+  itg_name <- integrity_name[k]
+  
+    
+  df <- read.csv(paste0("total_result/se/s", 10, "/itg", 10*itg[1], 10*itg[2], 
+                            "_rou", 9.3,".csv"))
+  df_2 <- read.csv(paste0("total_result/se/s", 5, "/itg", 10*itg[1], 10*itg[2], 
+                            "_rou", 9.3,".csv"))
+  df_3 <- read.csv(paste0("total_result/se/s", 3, "/itg", 10*itg[1], 10*itg[2], 
+                            "_rou", 9.3,".csv"))
+  SE_beta1 <- data.frame(se = df$V3, integrity = itg_name)
+  SE_beta2 <- data.frame(se = df_2$V3, integrity = itg_name)
+  SE_beta3 <- data.frame(se = df_3$V3, integrity = itg_name)
+  df_SEbeta1 <- rbind(df_SEbeta1, SE_beta1)
+  df_SEbeta2 <- rbind(df_SEbeta2, SE_beta2)
+  df_SEbeta3 <- rbind(df_SEbeta3, SE_beta3)
+  
+}
+
+df_SEbeta1$integrity <- factor(df_SEbeta1$integrity, levels = c("neither X1 nor X2", "20% X2", "50% X2", "all X2", "20%X1, 20%X2","50%X1, 50%X2", "all X1 and X2"))
+df_SEbeta2$integrity <- factor(df_SEbeta2$integrity, levels = c("neither X1 nor X2", "20% X2", "50% X2", "all X2", "20%X1, 20%X2","50%X1, 50%X2", "all X1 and X2"))
+df_SEbeta3$integrity <- factor(df_SEbeta3$integrity, levels = c("neither X1 nor X2", "20% X2", "50% X2", "all X2", "20%X1, 20%X2","50%X1, 50%X2", "all X1 and X2"))
+```
+
+```{r}
+plot1 <- ggplot(data = df_beta1, aes(x = integrity, y = beta)) +
+  geom_boxplot(color = "black", size = 0.5, outlier.colour = "black", outlier.size = 0.5) +
+  labs(title = "coefficient of X1") +
+  scale_x_discrete("",guide = guide_axis(angle = 90)) + 
+  theme_minimal()
+
+plot2 <- ggplot(data = df_beta2, aes(x = integrity, y = beta)) +
+  geom_boxplot(color = "black", size = 0.5, outlier.colour = "black", outlier.size = 0.5) +
+  labs(title = "coefficient of X2", x = "coefficient", y = "coefficient") +
+  scale_x_discrete(guide = guide_axis(angle = 90)) + 
+  scale_y_continuous("") +
+  theme_minimal()
+
+plot3 <- ggplot(data = df_beta3, aes(x = integrity, y = beta)) +
+  geom_boxplot(color = "black", size = 0.5, outlier.colour = "black", outlier.size = 0.5) +
+  labs(title = "coefficient of X3") +
+  scale_x_discrete("", guide = guide_axis(angle = 90)) + 
+  scale_y_continuous("") +
+  theme_minimal()
+
+plot4 <- ggplot(data = df_SEbeta1, aes(x = integrity, y = se)) +
+  geom_boxplot(color = "black", size = 0.5, outlier.colour = "black", outlier.size = 0.5) +
+  labs(title = "SE of beta3 - s = 1", y = "standard error") +
+  scale_x_discrete("",guide = guide_axis(angle = 90)) + 
+  theme_minimal()
+
+plot5 <- ggplot(data = df_SEbeta2, aes(x = integrity, y = se)) +
+  geom_boxplot(color = "black", size = 0.5, outlier.colour = "black", outlier.size = 0.5) +
+  labs(title = "SE of beta3 - s = 0.5", x = "Proportion") +
+  scale_x_discrete(guide = guide_axis(angle = 90)) + 
+  scale_y_continuous("") +
+  theme_minimal()
+
+plot6 <- ggplot(data = df_SEbeta2, aes(x = integrity, y = se)) +
+  geom_boxplot(color = "black", size = 0.5, outlier.colour = "black", outlier.size = 0.5) +
+  labs(title = "SE of beta3 - s = 0.3") +
+  scale_x_discrete("",guide = guide_axis(angle = 90)) + 
+  scale_y_continuous("") +
+  theme_minimal()
+
+plot_coefs_box <- grid.arrange(plot1, plot2, plot3, ncol = 3)
+ggsave("plot_coefs_box.png", plot = plot_coefs_box, dpi = 300)
+## Figure 2
+plot_se_box <- grid.arrange(plot4, plot5, plot6, ncol = 3)
+ggsave("plot_se_box.png", plot = plot_se_box,  dpi = 600)
+```
+
